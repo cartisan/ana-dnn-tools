@@ -1,3 +1,5 @@
+import logging
+
 from transformers import pipeline
 
 from utils import Timer, load_labeled_data, load_example_story
@@ -6,33 +8,52 @@ from utils import Timer, load_labeled_data, load_example_story
 MODEL = "j-hartmann/sentiment-roberta-large-english-3-classes"  # size: 1.3GB, too
 # MODEL = "nlptown/bert-base-multilingual-uncased-sentiment"  # size: 700 MB, 1-5 star ratings
 
+TIMER = Timer()
 
-def evaluate_sentiment_models():
-    timer = Timer()
-    labeled_sentences = load_labeled_data()
+logging.basicConfig(level=logging.INFO)
 
-    print("Start loading model")
-    with timer:
-        # sentiment_classifier = pipeline("sentiment-analysis")
+
+def create_sentiment_anaysis_model() -> pipeline:
+    """ Instantiates a sentiment analyzer that can process individual sentences.
+    Attention: This operation is costly and can take between 30s and 90s time.
+    """
+    logging.info(f"Loading sentiment analysis model `{MODEL}`, this will take some time")
+    with TIMER:
         sentiment_classifier = pipeline(
             task="sentiment-analysis",
             model=MODEL
         )
+    logging.info(f"Finished loading model in {TIMER.time:.3f}s")
+    return sentiment_classifier
 
-    print(f"Finished loading model in {timer.time:.3f}s")
+
+def analyze_sentiment(text: str, sentiment_classifier: pipeline) -> str:
+    """ Takes an instantiated transformers pipeline and a text, which can be both
+    a sentence or a paragraph. Then, performs sentiment analysis, determines a label
+    as well as the classifier's prediction confidence, and returns the label.
+    Label can be either one of {"positive", "neutral", "negative"}.
+    """
+    logging.info(f"Start analyzing sentiment of {text=}")
+    with TIMER:
+        sentiment = sentiment_classifier(text)
+    logging.info(f"Finished inference in {TIMER.time:.3f}s")
+
+    label, score = sentiment[0]["label"], sentiment[0]["score"]
+    logging.info(
+        f"Identified sentiment: {label} confidence: ({score * 100:.2f}%)"
+    )
+    return label
+
+
+def _evaluate_sentiment_models():
+    labeled_sentences = load_labeled_data()
+    sentiment_classifier = create_sentiment_anaysis_model()
 
     correct_labels = 0
     for sentence, true_label in labeled_sentences:
-        print(sentence)
-        with timer as t:
-            sentiment = sentiment_classifier(sentence)
-        label, score = sentiment[0]["label"], sentiment[0]["score"]
+        label = analyze_sentiment(sentence, sentiment_classifier)
         if label.lower() == true_label.lower():
             correct_labels += 1
-        print(
-            f"sentiment: {label} ({score * 100:.2f}%) -- classification time: {t.time:.3f}s"
-        )
-        print()
 
     print(f"Overall accuracy: {correct_labels / (len(labeled_sentences))}")
     # results:
@@ -42,30 +63,15 @@ def evaluate_sentiment_models():
     # nlptown/bert-base-multilingual-uncased-sentiment: 1-5 star ratings, its not too great
 
 
-def infer_example_story():
-    timer = Timer()
+def _infer_example_story():
     story_fragments = load_example_story()
-
-    print("Start loading model")
-    with timer:
-        # sentiment_classifier = pipeline("sentiment-analysis")
-        sentiment_classifier = pipeline(
-            task="sentiment-analysis",
-            model=MODEL,
-        )
-    print(f"Finished loading model in {timer.time:.3f}s")
-    print()
+    sentiment_classifier = create_sentiment_anaysis_model()
 
     for fragment in story_fragments:
-        print(fragment)
-        with timer as t:
-            sentiment = sentiment_classifier(fragment)
-        label, score = sentiment[0]["label"], sentiment[0]["score"]
-        print(
-            f"sentiment: {label} ({score * 100:.2f}%) -- classification time: {t.time:.3f}s"
-        )
-        print()
+        label = analyze_sentiment(fragment, sentiment_classifier)
+        print(f"{fragment} -> SENTIMENT: {label}")
 
 
 if __name__ == "__main__":
-    infer_example_story()
+    # _evaluate_sentiment_models()
+    _infer_example_story()
