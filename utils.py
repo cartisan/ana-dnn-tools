@@ -27,11 +27,11 @@ def load_labeled_data() -> List[Tuple[str, str]]:
     def load(filepath: Path, label: str) -> List[Tuple[str, str]]:
         with open(filepath, "r") as f:
             sentences = f.readlines()
-        sentences = [(s.strip(), label) for s in sentences]
-        return sentences
+
+        sentence_label_pairs = [(s.strip(), label) for s in sentences]
+        return sentence_label_pairs
 
     data_and_labels = load(POS_SENTENCES_FP, label="POSITIVE") + load(
         NEG_SENTENCES_FP, label="NEGATIVE"
     )
     return data_and_labels
-
